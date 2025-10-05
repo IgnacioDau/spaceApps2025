@@ -29,7 +29,7 @@ function initThree() {
     // Initialize scene, camera, and renderer first
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(60, width / height, 0.001, 500);
-    camera.position.set(0, 0, 200);
+    camera.position.set(0, 0, 100);
 
     // Create renderer before adding event listeners
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -99,7 +99,7 @@ function initThree() {
     // Add event listeners
     window.addEventListener('resize', onWindowResize);
     //renderer.domElement.addEventListener('click', onEarthClick);
-    renderer.domElement.addEventListener('click', (event) => onEarthClick(event, earthMesh.geometry.parameters.radius * 0.1));
+    renderer.domElement.addEventListener('click', (event) => onEarthClick(event, earthMesh.geometry.parameters.radius / 6371));
     // Start animation loop
     animate();
 }
@@ -154,7 +154,8 @@ function onEarthClick(event, domeRadius) {
         ];
 
         // Create and position each dome with different sizes
-        const sizes = [1.0, 0.75, 0.5, 0.25];
+        E = 100000000
+        const sizes = [14.7*E**0.434, 15.2*E**0.292, 6.1*E**0.388, 0.17*E**0.977];
         const domes = sizes.map((size, i) => {
             const geometry = new THREE.SphereGeometry(
                 domeRadius * size,
