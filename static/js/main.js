@@ -13,59 +13,95 @@
 
 let scene, camera, renderer, controls;
 let earthMesh, orbitLine;
+let raycaster, mouse;
+let selectedDome;
 const SCALE = 1 / 1000; // Convert kilometres to Three.js units
+const textureLoader = new THREE.TextureLoader();
 
 /**
  * Initialise the Three.js scene, camera and renderer.
  */
 function initThree() {
-  const container = document.getElementById('threeContainer');
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  scene = new THREE.Scene();
+    const container = document.getElementById('threeContainer');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    // Initialize scene, camera, and renderer first
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(60, width / height, 0.001, 500);
+    camera.position.set(0, 0, 200);
 
-  // Camera with a relatively far clipping plane to accommodate large orbits
-  camera = new THREE.PerspectiveCamera(60, width / height, 0.001, 500);
-  camera.position.set(0, 0, 200);
+    // Create renderer before adding event listeners
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    container.appendChild(renderer.domElement);
 
-  // Ambient and directional lighting for a simple shaded sphere
-  const ambient = new THREE.AmbientLight(0x888888);
-  scene.add(ambient);
-  const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-  directional.position.set(1, 1, 1);
-  scene.add(directional);
+    // Add lighting
+    const ambient = new THREE.AmbientLight(0x888888);
+    scene.add(ambient);
+    const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+    directional.position.set(1, 1, 1);
+    scene.add(directional);
 
-  // Create Earth sphere using a basic material
-  const earthRadiusKm = 6371;
-  const geometry = new THREE.SphereGeometry(earthRadiusKm * SCALE, 64, 32);
-  // Colour approximations for land and ocean; emissive adds a slight glow
-  const material = new THREE.MeshPhongMaterial({
-    color: 0x0b3d91,
-    emissive: 0x081f44,
-    specular: 0x222222,
-    shininess: 10
-  });
-  earthMesh = new THREE.Mesh(geometry, material);
-  scene.add(earthMesh);
+    // Create Earth with proper error handling for textures
+    const earthRadiusKm = 6371;
+    const geometry = new THREE.SphereGeometry(earthRadiusKm * SCALE, 64, 32);
 
-  // Renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
-  container.appendChild(renderer.domElement);
+    // Add loading manager to handle errors
+    const loadManager = new THREE.LoadingManager();
+    loadManager.onError = function(url) {
+        console.error('Error loading texture:', url);
+    };
 
-  // Orbit controls to allow user interaction
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.enablePan = false;
-  controls.minDistance = 5;
-  controls.maxDistance = 400;
+    const textureLoader = new THREE.TextureLoader(loadManager);
+    
+    // Create a basic material first in case textures fail to load
+    const material = new THREE.MeshPhongMaterial({
+        color: 0x2233ff, // Blue color as fallback
+        shininess: 10
+    });
 
-  // Handle window resize
-  window.addEventListener('resize', onWindowResize);
+    // Create and add Earth mesh immediately with basic material
+    earthMesh = new THREE.Mesh(geometry, material);
+    scene.add(earthMesh);
 
-  animate();
+    // Load textures and update material when ready
+    Promise.all([
+        new Promise(resolve => textureLoader.load('static/textures/earth_daymap.jpg', resolve)),
+        new Promise(resolve => textureLoader.load('static/textures/earth_bumpmap.jpg', resolve)),
+        new Promise(resolve => textureLoader.load('static/textures/earth_specular.jpg', resolve))
+    ]).then(([earthTexture, bumpTexture, specularTexture]) => {
+        earthMesh.material = new THREE.MeshPhongMaterial({
+            map: earthTexture,
+            bumpMap: bumpTexture,
+            bumpScale: 0.05,
+            specularMap: specularTexture,
+            specular: new THREE.Color('grey'),
+            shininess: 10
+        });
+    }).catch(error => {
+        console.error('Failed to load textures:', error);
+    });
+
+    // Initialize controls after renderer is created
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.enablePan = false;
+    controls.minDistance = 5;
+    controls.maxDistance = 400;
+
+    // Initialize raycaster and mouse
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Add event listeners
+    window.addEventListener('resize', onWindowResize);
+    renderer.domElement.addEventListener('click', onEarthClick);
+
+    // Start animation loop
+    animate();
 }
 
 /**
@@ -87,6 +123,47 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
   renderer.render(scene, camera);
+}
+
+function onEarthClick(event) {
+    // Calculate mouse position in normalized device coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    // Update the picking ray with the camera and mouse position
+    raycaster.setFromCamera(mouse, camera);
+
+    // Calculate objects intersecting the picking ray
+    const intersects = raycaster.intersectObject(earthMesh);
+
+    if (intersects.length > 0) {
+        // Remove previous dome if it exists
+        if (selectedDome) {
+            scene.remove(selectedDome);
+        }
+
+        // Create dome at intersection point
+        const intersectionPoint = intersects[0].point;
+        const domeRadius = earthMesh.geometry.parameters.radius * 0.1; // 10% of Earth radius
+        const domeGeometry = new THREE.SphereGeometry(
+            domeRadius, 32, 32,
+            0, Math.PI * 2, 0, Math.PI / 2
+        );
+        const domeMaterial = new THREE.MeshPhongMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.5
+        });
+
+        selectedDome = new THREE.Mesh(domeGeometry, domeMaterial);
+        selectedDome.position.copy(intersectionPoint);
+        
+        // Orient dome to face outward from Earth's center
+        selectedDome.lookAt(earthMesh.position);
+        selectedDome.rotateX(Math.PI / 2);
+        
+        scene.add(selectedDome);
+    }
 }
 
 /**
