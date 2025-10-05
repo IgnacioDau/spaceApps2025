@@ -37,7 +37,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv, dotenv_values
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 load_dotenv()
 
@@ -386,10 +386,9 @@ def api_simulate():
     })
 
 
-@app.route("/")
-def root():
-    """Serve the main page."""
-    return app.send_static_file("index.html")
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 
 if __name__ == "__main__":
