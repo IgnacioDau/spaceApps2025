@@ -14,7 +14,7 @@
 let scene, camera, renderer, controls;
 let earthMesh, orbitLine;
 let raycaster, mouse;
-let selectedDome;
+let dome1, dome2, dome3, dome4;
 const SCALE = 1 / 1000; // Convert kilometres to Three.js units
 const textureLoader = new THREE.TextureLoader();
 
@@ -136,33 +136,60 @@ function onEarthClick(event) {
     // Calculate objects intersecting the picking ray
     const intersects = raycaster.intersectObject(earthMesh);
 
+    function domeGeometry(radius) {
+      return new THREE.SphereGeometry(
+        radius, 32, 32,
+        0, Math.PI * 2, 0, Math.PI);
+    }
+
     if (intersects.length > 0) {
         // Remove previous dome if it exists
-        if (selectedDome) {
-            scene.remove(selectedDome);
+        if (dome1 && dome2 && dome3 && dome4) {
+            scene.remove(dome1);
+            scene.remove(dome2);
+            scene.remove(dome3);
+            scene.remove(dome4);
         }
 
         // Create dome at intersection point
         const intersectionPoint = intersects[0].point;
         const domeRadius = earthMesh.geometry.parameters.radius * 0.1; // 10% of Earth radius
-        const domeGeometry = new THREE.SphereGeometry(
-            domeRadius, 32, 32,
-            0, Math.PI * 2, 0, Math.PI / 2
-        );
-        const domeMaterial = new THREE.MeshPhongMaterial({
+
+        function domeMaterial() {
+          return new THREE.MeshPhongMaterial({
             color: 0xff0000,
             transparent: true,
-            opacity: 0.5
+            opacity: 0.2
         });
+      }
 
-        selectedDome = new THREE.Mesh(domeGeometry, domeMaterial);
-        selectedDome.position.copy(intersectionPoint);
+        dome1 = new THREE.Mesh(domeGeometry(domeRadius), domeMaterial());
+        dome2 = new THREE.Mesh(domeGeometry(domeRadius / 2), domeMaterial());
+        dome3 = new THREE.Mesh(domeGeometry(domeRadius / 4), domeMaterial());
+        dome4 = new THREE.Mesh(domeGeometry(domeRadius / 8), domeMaterial());
+
+        dome1.position.copy(intersectionPoint);
+        dome2.position.copy(intersectionPoint);
+        dome3.position.copy(intersectionPoint);
+        dome4.position.copy(intersectionPoint);
         
         // Orient dome to face outward from Earth's center
-        selectedDome.lookAt(earthMesh.position);
-        selectedDome.rotateX(Math.PI / 2);
+        dome1.lookAt(earthMesh.position);
+        dome1.rotateX(Math.PI);
+
+        dome2.lookAt(earthMesh.position);
+        dome2.rotateX(Math.PI);
+
+        dome3.lookAt(earthMesh.position);
+        dome3.rotateX(Math.PI);
+
+        dome4.lookAt(earthMesh.position);
+        dome4.rotateX(Math.PI);
         
-        scene.add(selectedDome);
+        scene.add(dome1);
+        scene.add(dome2);
+        scene.add(dome3);
+        scene.add(dome4);
     }
 }
 
