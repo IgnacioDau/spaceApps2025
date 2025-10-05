@@ -98,8 +98,8 @@ function initThree() {
 
     // Add event listeners
     window.addEventListener('resize', onWindowResize);
-    renderer.domElement.addEventListener('click', onEarthClick);
-
+    //renderer.domElement.addEventListener('click', onEarthClick);
+    renderer.domElement.addEventListener('click', (event) => onEarthClick(event, earthMesh.geometry.parameters.radius * 0.1));
     // Start animation loop
     animate();
 }
@@ -125,71 +125,55 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-function onEarthClick(event) {
+function onEarthClick(event, domeRadius) {
     // Calculate mouse position in normalized device coordinates
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    // Update the picking ray with the camera and mouse position
     raycaster.setFromCamera(mouse, camera);
-
-    // Calculate objects intersecting the picking ray
     const intersects = raycaster.intersectObject(earthMesh);
 
-    function domeGeometry(radius) {
-      return new THREE.SphereGeometry(
-        radius, 32, 32,
-        0, Math.PI * 2, 0, Math.PI);
-    }
-
     if (intersects.length > 0) {
-        // Remove previous dome if it exists
-        if (dome1 && dome2 && dome3 && dome4) {
-            scene.remove(dome1);
-            scene.remove(dome2);
-            scene.remove(dome3);
-            scene.remove(dome4);
-        }
+        // Remove previous domes
+        if (dome1) scene.remove(dome1);
+        if (dome2) scene.remove(dome2);
+        if (dome3) scene.remove(dome3);
+        if (dome4) scene.remove(dome4);
 
-        // Create dome at intersection point
         const intersectionPoint = intersects[0].point;
-        const domeRadius = earthMesh.geometry.parameters.radius * 0.1; // 10% of Earth radius
+        const normal = intersects[0].face.normal.clone();
+        //const domeRadius = earthMesh.geometry.parameters.radius * 0.1;
 
-        function domeMaterial() {
-          return new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            transparent: true,
-            opacity: 0.2
+        // Create materials with different colors and transparencies
+        const materials = [
+            new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, depthWrite: false }),
+            new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
+            new THREE.MeshPhongMaterial({ color: 0x534e00, transparent: true, opacity: 0.5, depthWrite: false }),
+            new THREE.MeshPhongMaterial({ color: 0x000000, transparent: false, opacity: 0.5 })
+        ];
+
+        // Create and position each dome with different sizes
+        const sizes = [1.0, 0.75, 0.5, 0.25];
+        const domes = sizes.map((size, i) => {
+            const geometry = new THREE.SphereGeometry(
+                domeRadius * size,
+                32, 32,
+                0, Math.PI * 2, 0, Math.PI / 2
+            );
+            const dome = new THREE.Mesh(geometry, materials[i]);
+            dome.position.copy(intersectionPoint);
+            
+            // Calculate the rotation to align with surface normal
+            const quaternion = new THREE.Quaternion();
+            quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+            dome.setRotationFromQuaternion(quaternion);
+            
+            return dome;
         });
-      }
 
-        dome1 = new THREE.Mesh(domeGeometry(domeRadius), domeMaterial());
-        dome2 = new THREE.Mesh(domeGeometry(domeRadius / 2), domeMaterial());
-        dome3 = new THREE.Mesh(domeGeometry(domeRadius / 4), domeMaterial());
-        dome4 = new THREE.Mesh(domeGeometry(domeRadius / 8), domeMaterial());
-
-        dome1.position.copy(intersectionPoint);
-        dome2.position.copy(intersectionPoint);
-        dome3.position.copy(intersectionPoint);
-        dome4.position.copy(intersectionPoint);
-        
-        // Orient dome to face outward from Earth's center
-        dome1.lookAt(earthMesh.position);
-        dome1.rotateX(Math.PI);
-
-        dome2.lookAt(earthMesh.position);
-        dome2.rotateX(Math.PI);
-
-        dome3.lookAt(earthMesh.position);
-        dome3.rotateX(Math.PI);
-
-        dome4.lookAt(earthMesh.position);
-        dome4.rotateX(Math.PI);
-        
-        scene.add(dome1);
-        scene.add(dome2);
-        scene.add(dome3);
-        scene.add(dome4);
+        [dome1, dome2, dome3, dome4] = domes;
+        domes.forEach(dome => scene.add(dome));
     }
 }
 
@@ -198,21 +182,6 @@ function onEarthClick(event) {
  *
  * @param {Array} positions List of position objects with x, y and z in km.
  */
-function drawOrbit(positions) {
-  // Remove existing line if present
-  if (orbitLine) {
-    scene.remove(orbitLine);
-    orbitLine.geometry.dispose();
-    orbitLine.material.dispose();
-    orbitLine = undefined;
-  }
-  // Convert positions to Vector3 points, scaling from km to scene units
-  const pts = positions.map(p => new THREE.Vector3(p.x * SCALE, p.y * SCALE, p.z * SCALE));
-  const geometry = new THREE.BufferGeometry().setFromPoints(pts);
-  const material = new THREE.LineBasicMaterial({ color: 0xffa500 });
-  orbitLine = new THREE.Line(geometry, material);
-  scene.add(orbitLine);
-}
 
 /**
  * Display impact results in the sidebar as a table.
@@ -316,7 +285,6 @@ async function runSimulation(event) {
       return;
     }
     const data = await resp.json();
-    drawOrbit(data.orbit_positions);
     displayResults(data.impact_results);
   } catch (err) {
     alert('Request failed: ' + err);
