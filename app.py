@@ -37,9 +37,11 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv, dotenv_values
 import requests
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, request, jsonify, render_template
 
+# Load environment variables
 load_dotenv()
+NASA_API_KEY = os.getenv('NASA_API_KEY', 'DEMO_KEY')
 
 app = Flask(__name__)
 
@@ -188,7 +190,7 @@ def _solve_keplers_equation(e: float, M: float, tol: float = 1e-10) -> float:
 
 def compute_impact_effects(
     diameter_m: float,
-    density: float,
+    mass: float,
     velocity_m_per_s: float,
     impact_angle_deg: float,
     crater_coeff: float = 1.0e-2,
@@ -227,7 +229,7 @@ def compute_impact_effects(
     # Convert diameter to radius
     radius = diameter_m / 2.0
     volume = (4.0 / 3.0) * math.pi * radius**3
-    mass = volume * density  # kg
+
     # Only the vertical component of velocity contributes to crater formation
     angle_rad = math.radians(impact_angle_deg)
     v_vertical = velocity_m_per_s * math.sin(angle_rad)
@@ -249,7 +251,7 @@ def compute_impact_effects(
     }
 
 
-def fetch_neo_data(neo_id: str, api_key: Optional[str] = "rxMvMTUajdWXf7iWqTXTqvnbf9vR3eSdCHEw1nF0") -> Dict[str, Any]:
+def fetch_neo_data(neo_id: str, api_key: Optional[str] = NASA_API_KEY) -> Dict[str, Any]:
     """Fetch a single Near Earth Object from NASA's NeoWs API.
 
     Parameters
@@ -286,20 +288,11 @@ def api_asteroid(neo_id: str):
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
     # Extract minimal subset of fields for the frontend
-    orbital = data.get("orbital_data", {})
     response = {
         "name": data.get("name"),
         "id": data.get("id"),
         "estimated_diameter_m": data.get("estimated_diameter", {}).get("meters", {}),
         "is_potentially_hazardous": data.get("is_potentially_hazardous_asteroid"),
-        "orbital_data": {
-            "semi_major_axis_au": float(orbital.get("semi_major_axis", 0.0)),
-            "eccentricity": float(orbital.get("eccentricity", 0.0)),
-            "inclination_deg": float(orbital.get("inclination", 0.0)),
-            "ascending_node_longitude_deg": float(orbital.get("ascending_node_longitude", 0.0)),
-            "argument_of_periapsis_deg": float(orbital.get("perihelion_argument", 0.0)),
-            "mean_anomaly_deg": float(orbital.get("mean_anomaly", 0.0)),
-        },
     }
     return jsonify(response)
 
@@ -332,10 +325,7 @@ def api_simulate():
         return jsonify({"error": "Invalid JSON"}), 400
 
     # Determine orbital parameters
-    orbit_data: Optional[Dict[str, float]] = None
-    if "orbit" in payload:
-        orbit_data = payload["orbit"]
-    elif "neo_id" in payload:
+    if "neo_id" in payload:
         try:
             neo_data = fetch_neo_data(payload["neo_id"])
             od = neo_data.get("orbital_data", {})
@@ -350,38 +340,22 @@ def api_simulate():
         except Exception as exc:
             return jsonify({"error": str(exc)}), 500
     else:
-        return jsonify({"error": "No orbit or neo_id provided"}), 400
+        return jsonify({"error": "No parameters or neo_id provided"}), 400
 
     # Extract physical parameters
-    diameter_m = float(payload.get("projectile_diameter_m", 10.0))
-    density = float(payload.get("projectile_density", 3000.0))  # kg/m^3
-    impact_velocity_km_s = float(payload.get("impact_velocity_km_s", 20.0))
-    impact_velocity_m_s = impact_velocity_km_s * 1000.0
-    impact_angle_deg = float(payload.get("impact_angle_deg", 45.0))
-
-    # Compute orbital positions
-    positions = kepler_to_cartesian(
-        a=orbit_data["semi_major_axis_au"],
-        e=orbit_data["eccentricity"],
-        i_deg=orbit_data["inclination_deg"],
-        omega_deg=orbit_data["ascending_node_longitude_deg"],
-        w_deg=orbit_data["argument_of_periapsis_deg"],
-        M_deg=orbit_data["mean_anomaly_deg"],
-        steps=int(payload.get("simulation_steps", 200)),
-        timespan_days=float(payload.get("timespan_days", 365.25)),
-    )
+    diameter_m = float(payload.get("diameter", 10.0))
+    mass = float(payload.get("mass", 300000.0)) # kg
+    velocity = float(payload.get("impact_velocity_km_s", 20.0))
+    impact_velocity_m_s = velocity * 1000.0
 
     # Compute impact effects
     impact_results = compute_impact_effects(
         diameter_m=diameter_m,
-        density=density,
+        mass=mass,
         velocity_m_per_s=impact_velocity_m_s,
-        impact_angle_deg=impact_angle_deg,
-        crater_coeff=float(payload.get("crater_coefficient", 1.0e-2)),
     )
 
     return jsonify({
-        "orbit_positions": positions,
         "impact_results": impact_results,
     })
 

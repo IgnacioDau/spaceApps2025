@@ -147,20 +147,20 @@ function onEarthClick(event, domeRadius) {
 
         // Create materials with different colors and transparencies
         const materials = [
-            new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, depthWrite: false }),
-            new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
-            new THREE.MeshPhongMaterial({ color: 0x534e00, transparent: true, opacity: 0.5, depthWrite: false }),
-            new THREE.MeshPhongMaterial({ color: 0x000000, transparent: false, opacity: 0.5 })
+            new THREE.MeshPhongMaterial({ color: 0xfffec4, transparent: true, opacity: 0.3, depthWrite: false }),
+            new THREE.MeshPhongMaterial({ color: 0xffde89, transparent: true, opacity: 0.3, depthWrite: false }),
+            new THREE.MeshPhongMaterial({ color: 0xfeb16a, transparent: true, opacity: 0.3, depthWrite: false }),
+            new THREE.MeshPhongMaterial({ color: 0xc50e11, transparent: true, opacity: 0.3, depthWrite: false })
         ];
 
         // Create and position each dome with different sizes
         E = 100000000
-        const sizes = [14.7*E**0.434, 15.2*E**0.292, 6.1*E**0.388, 0.17*E**0.977];
+        const sizes = [14.7*E**0.374, 15.2*E**0.3, 7.1*E**0.35, 3.17*E**0.377];
         const domes = sizes.map((size, i) => {
             const geometry = new THREE.SphereGeometry(
                 domeRadius * size,
                 32, 32,
-                0, Math.PI * 2, 0, Math.PI / 2
+                0, Math.PI * 2, 0, Math.PI
             );
             const dome = new THREE.Mesh(geometry, materials[i]);
             dome.position.copy(intersectionPoint);
@@ -218,11 +218,8 @@ function updateShareLink() {
   const neoId = document.getElementById('neoId').value.trim();
   if (neoId) params.set('neo_id', neoId);
   params.set('diameter', document.getElementById('diameter').value);
-  params.set('density', document.getElementById('density').value);
+  params.set('mass', document.getElementById('mass').value);
   params.set('velocity', document.getElementById('velocity').value);
-  params.set('angle', document.getElementById('angle').value);
-  params.set('steps', document.getElementById('steps').value);
-  params.set('timespan', document.getElementById('timespan').value);
   const link = base + '?' + params.toString();
   document.getElementById('shareLink').value = link;
 }
@@ -235,11 +232,8 @@ function parseQueryAndRun() {
   const params = new URLSearchParams(window.location.search);
   if (params.has('neo_id')) document.getElementById('neoId').value = params.get('neo_id');
   if (params.has('diameter')) document.getElementById('diameter').value = params.get('diameter');
-  if (params.has('density')) document.getElementById('density').value = params.get('density');
+  if (params.has('mass')) document.getElementById('mass').value = params.get('mass');
   if (params.has('velocity')) document.getElementById('velocity').value = params.get('velocity');
-  if (params.has('angle')) document.getElementById('angle').value = params.get('angle');
-  if (params.has('steps')) document.getElementById('steps').value = params.get('steps');
-  if (params.has('timespan')) document.getElementById('timespan').value = params.get('timespan');
   // If any query parameter is provided, run automatically
   if ([...params.keys()].length > 0) {
     runSimulation();
@@ -256,23 +250,11 @@ async function runSimulation(event) {
   const payload = {};
   if (neoId) {
     payload.neo_id = neoId;
-  } else {
-    // Default to an Earth‑like circular orbit if no ID is supplied
-    payload.orbit = {
-      semi_major_axis_au: 1.0,
-      eccentricity: 0.0,
-      inclination_deg: 0.0,
-      ascending_node_longitude_deg: 0.0,
-      argument_of_periapsis_deg: 0.0,
-      mean_anomaly_deg: 0.0
-    };
   }
   payload.projectile_diameter_m = parseFloat(document.getElementById('diameter').value) || 0;
-  payload.projectile_density = parseFloat(document.getElementById('density').value) || 0;
+  payload.projectile_mass = parseFloat(document.getElementById('mass').value) || 0;
   payload.impact_velocity_km_s = parseFloat(document.getElementById('velocity').value) || 0;
-  payload.impact_angle_deg = parseFloat(document.getElementById('angle').value) || 45;
-  payload.simulation_steps = parseInt(document.getElementById('steps').value) || 200;
-  payload.timespan_days = parseFloat(document.getElementById('timespan').value) || 365;
+
   // Send request
   try {
     const resp = await fetch('/api/simulate', {
@@ -297,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initThree();
   document.getElementById('simForm').addEventListener('submit', runSimulation);
   // Update share link whenever inputs change
-  const inputs = ['neoId','diameter','density','velocity','angle','steps','timespan'];
+  const inputs = ['neoId','diameter','mass','velocity'];
   for (const id of inputs) {
     document.getElementById(id).addEventListener('input', updateShareLink);
   }
